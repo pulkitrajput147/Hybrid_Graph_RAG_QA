@@ -21,7 +21,7 @@ class HybridGraphRetriever(BaseRetriever):
     2. Extracts entities from the retrieved text.
     3. Traverses the knowledge graph from those entities to enrich the context.
     """
-    def __init__(self, vector_index: VectorStoreIndex, graph_index: PropertyGraphIndex, top_k: int = 4):
+    def __init__(self, vector_index: VectorStoreIndex, graph_index: PropertyGraphIndex, top_k: int = 10):
         self._vector_retriever = vector_index.as_retriever(similarity_top_k=top_k)
         self._graph_retriever = graph_index.as_retriever(include_text=True)  # Include text for better context
         self._llm = Settings.llm
@@ -30,6 +30,9 @@ class HybridGraphRetriever(BaseRetriever):
 
     def _get_entities_from_text(self, text: str) -> List[str]:
         """Uses an LLM to extract key entities from a text block."""
+
+        logger.info("The received text is :\n",{text})
+        logger.info("\n")
         prompt = PromptTemplate(
             "Based on the following text about government budget documents, identify and list the key entities "
             "(e.g., departments, budget items, locations, monetary figures, years, programs). "
@@ -53,6 +56,7 @@ class HybridGraphRetriever(BaseRetriever):
         # 1. Vector Search
         logger.info("Step 1: Performing vector search...")
         vector_nodes = self._vector_retriever.retrieve(query_bundle)
+        logger.info("Vector nodes are :\n",vector_nodes)
         logger.info(f"Vector search returned {len(vector_nodes)} nodes")
         
         # 2. Entity Linking
@@ -70,7 +74,7 @@ class HybridGraphRetriever(BaseRetriever):
             logger.info("Step 3: Expanding with graph traversal...")
             try:
                 # Create multiple focused queries from entities
-                entity_batches = list(all_entities)[:5]  # Limit to prevent overwhelming
+                entity_batches = list(all_entities)[:10]  # Limit to prevent overwhelming
                 for entity in entity_batches:
                     graph_query = f"{query_bundle.query_str} {entity}"
                     graph_nodes = self._graph_retriever.retrieve(QueryBundle(query_str=graph_query))
@@ -86,4 +90,5 @@ class HybridGraphRetriever(BaseRetriever):
                 logger.warning(f"Graph traversal failed: {e}")
         
         logger.info(f"Total retrieved nodes: {len(retrieved_nodes)}")
+        logger.info(f"retrieved nodes\n: {(retrieved_nodes)}")
         return retrieved_nodes[:self.top_k * 4]  # Return reasonable number of nodes
